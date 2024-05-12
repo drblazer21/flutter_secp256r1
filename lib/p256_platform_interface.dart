@@ -33,6 +33,10 @@ abstract class SecureP256Platform extends PlatformInterface {
     return _instance.sign(tag, payload);
   }
 
+  Future<bool> isStrongboxSupported() {
+    return _instance.isStrongboxSupported();
+  }
+
   Future<bool> verify(
     Uint8List payload,
     Uint8List publicKey,

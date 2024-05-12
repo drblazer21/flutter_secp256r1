@@ -53,4 +53,12 @@ class SecureP256Channel extends SecureP256Platform {
     );
     return result;
   }
+
+  @override
+  Future<bool> isStrongboxSupported() async {
+    final result = await methodChannel.invokeMethod(
+      Methods.isStrongboxSupported,
+    );
+    return result;
+  }
 }

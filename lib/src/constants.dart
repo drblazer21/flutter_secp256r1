@@ -5,4 +5,5 @@ class Methods {
   static const sign = 'sign';
   static const verify = 'verify';
   static const getSharedSecret = 'getSharedSecret';
+  static const isStrongboxSupported = 'isStrongboxSupported';
 }

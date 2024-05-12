@@ -23,6 +23,10 @@ class SecureP256 {
     }
   }
 
+  static Future<bool> isStrongboxSupported() async {
+    return SecureP256Platform.instance.isStrongboxSupported();
+  }
+
   static Future<Uint8List> sign(String tag, Uint8List payload) async {
     assert(tag.isNotEmpty);
     assert(payload.isNotEmpty);

@@ -1,7 +1,7 @@
 package com.astrox.secure_p256_plugin
 
 import android.content.Context
-//import android.content.pm.PackageManager
+import android.content.pm.PackageManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -10,17 +10,17 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.conscrypt.Conscrypt
 import java.security.*
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.KeyAgreement
-
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.conscrypt.Conscrypt
 
 /** SecureP256Plugin */
 class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
+
     companion object {
         const val storeProvider: String = "AndroidKeyStore"
         const val signatureAlgorithm: String = "SHA256withECDSA"
@@ -53,14 +53,12 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
                     val keyPair = getKeyPairFromAlias(alias)
                     result.success(keyPair.public.encoded)
                 }
-
                 "sign" -> {
                     val cAlias = call.argument<String>("tag")!!
                     val payload = call.argument<ByteArray>("payload")!!
                     val signature = sign(cAlias, payload)
                     result.success(signature)
                 }
-
                 "verify" -> {
                     val cPublicKey = call.argument<ByteArray>("publicKey")!!
                     val cPayload = call.argument<ByteArray>("payload")!!
@@ -68,7 +66,6 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
                     val verifyResult = verify(cPublicKey, cPayload, cSignature)
                     result.success(verifyResult)
                 }
-
                 "getSharedSecret" -> {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                         result.error("getSharedSecret", "Unsupported API level", null)
@@ -79,7 +76,9 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
                     val sharedSecret = ecdh(cAlias, cPublicKey)
                     result.success(sharedSecret)
                 }
-
+                "isStrongboxSupported" -> {
+                    result.success(hasStrongBox())
+                }
                 else -> result.notImplemented()
             }
         } catch (e: Throwable) {
@@ -90,19 +89,21 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
     /**
      * Obtain the keystore private key entry reference from the given key.
      *
-     * Reading the private key data is invalid in the runtime, it's protected by the operating system.
+     * Reading the private key data is invalid in the runtime, it's protected by the operating
+     * system.
      *
      * @param [alias] The key of which key should be obtained.
      * @return The entry reference.
      * @throws GeneralSecurityException If the key data could not be access by security reasons.
-     * @throws InvalidKeyException If the key data is unable to be read from the underlying provider.
+     * @throws InvalidKeyException If the key data is unable to be read from the underlying
+     * provider.
      * @throws TypeCastException If the entry is not [KeyStore.PrivateKeyEntry].
      */
     @Throws(GeneralSecurityException::class, InvalidKeyException::class, TypeCastException::class)
     @Synchronized
     private fun obtainPrivateKeyEntryFromAliasWithRetry(
-        alias: String,
-        keyStore: KeyStore? = null
+            alias: String,
+            keyStore: KeyStore? = null
     ): KeyStore.PrivateKeyEntry {
         val ks: KeyStore = keyStore ?: KeyStore.getInstance(storeProvider).apply { load(null) }
         val entry = ks.getEntry(alias, null)
@@ -112,7 +113,10 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
         return entry
     }
 
-    private fun obtainPrivateKeyEntryFromAlias(alias: String, keyStore: KeyStore? = null): KeyStore.PrivateKeyEntry {
+    private fun obtainPrivateKeyEntryFromAlias(
+            alias: String,
+            keyStore: KeyStore? = null
+    ): KeyStore.PrivateKeyEntry {
         return try {
             obtainPrivateKeyEntryFromAliasWithRetry(alias, keyStore)
         } catch (ignored: InvalidKeyException) {
@@ -125,31 +129,64 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
     @Synchronized
     private fun getKeyPairFromAlias(alias: String, throwIfNotExists: Boolean = false): KeyPair {
         val ks: KeyStore = KeyStore.getInstance(storeProvider).apply { load(null) }
-        val keyPair: KeyPair = if (ks.containsAlias(alias)) {
-            val entry = obtainPrivateKeyEntryFromAlias(alias, ks)
-            KeyPair(entry.certificate.publicKey, entry.privateKey)
-        } else if (throwIfNotExists) {
-            throw KeyStoreException("No key was found with the alias $alias.")
-        } else {
-            val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, storeProvider)
-            var properties = KeyProperties.PURPOSE_ENCRYPT or
-                    KeyProperties.PURPOSE_DECRYPT or
-                    KeyProperties.PURPOSE_SIGN or
-                    KeyProperties.PURPOSE_VERIFY
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                properties = properties or KeyProperties.PURPOSE_AGREE_KEY
-            }
-            val parameterSpec = KeyGenParameterSpec.Builder(alias, properties).apply {
-                setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                setDigests(KeyProperties.DIGEST_SHA256)
-                // Not setting the strong box until we figure out if it's valid.
-                //if (hasStrongBox() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                //  setIsStrongBoxBacked(true)
-                //}
-            }.build()
-            kpg.initialize(parameterSpec)
-            kpg.generateKeyPair()
-        }
+        val keyPair: KeyPair =
+                if (ks.containsAlias(alias)) {
+                    val entry = obtainPrivateKeyEntryFromAlias(alias, ks)
+                    KeyPair(entry.certificate.publicKey, entry.privateKey)
+                } else if (throwIfNotExists) {
+                    throw KeyStoreException("No key was found with the alias $alias.")
+                } else {
+                    val kpg: KeyPairGenerator =
+                            KeyPairGenerator.getInstance(
+                                    KeyProperties.KEY_ALGORITHM_EC,
+                                    storeProvider
+                            )
+                    var properties =
+                            KeyProperties.PURPOSE_ENCRYPT or
+                                    KeyProperties.PURPOSE_DECRYPT or
+                                    KeyProperties.PURPOSE_SIGN or
+                                    KeyProperties.PURPOSE_VERIFY
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        properties = properties or KeyProperties.PURPOSE_AGREE_KEY
+                    }
+                    val timeout = 10 // seconds
+
+                    val parameterSpec =
+                            KeyGenParameterSpec.Builder(alias, properties)
+                                    .apply {
+                                        setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+                                        setDigests(KeyProperties.DIGEST_SHA256)
+
+                                        setUserAuthenticationRequired(true)
+
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            setUserAuthenticationParameters(
+                                                    timeout,
+                                                    KeyProperties.AUTH_DEVICE_CREDENTIAL or
+                                                            KeyProperties.AUTH_BIOMETRIC_STRONG
+                                            )
+                                        } else {
+                                            setUserAuthenticationValidityDurationSeconds(timeout)
+                                        }
+
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                            setInvalidatedByBiometricEnrollment(true)
+                                        }
+
+                                        // setUserPresenceRequired(true)
+
+                                        // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                        //     setUnlockedDeviceRequired(true)
+                                        // }
+
+                                        if (hasStrongBox()) {
+                                            setIsStrongBoxBacked(true)
+                                        }
+                                    }
+                                    .build()
+                    kpg.initialize(parameterSpec)
+                    kpg.generateKeyPair()
+                }
         return keyPair
     }
 
@@ -163,7 +200,11 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
     }
 
     @Synchronized
-    private fun verify(publicKeyBytes: ByteArray, payload: ByteArray, signatureBytes: ByteArray): Boolean {
+    private fun verify(
+            publicKeyBytes: ByteArray,
+            payload: ByteArray,
+            signatureBytes: ByteArray
+    ): Boolean {
         val kf = KeyFactory.getInstance("EC")
         val publicKeySpec: EncodedKeySpec = X509EncodedKeySpec(publicKeyBytes)
         val key = kf.generatePublic(publicKeySpec)
@@ -185,12 +226,13 @@ class SecureP256Plugin : FlutterPlugin, MethodCallHandler {
         return agreement.generateSecret()
     }
 
-//    private fun hasStrongBox(): Boolean {
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-//            return applicationContext!!.packageManager.hasSystemFeature(
-//                PackageManager.FEATURE_STRONGBOX_KEYSTORE
-//            )
-//        }
-//        return false
-//    }
+    @Synchronized
+    private fun hasStrongBox(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return applicationContext!!.packageManager.hasSystemFeature(
+                    PackageManager.FEATURE_STRONGBOX_KEYSTORE
+            )
+        }
+        return false
+    }
 }
