@@ -14,6 +14,7 @@ dependencies:
     path: ../
 
   agent_dart: ^1.0.0-0
+  agent_dart_base: ^1.0.0-0
   convert: any
   crypto: any
   tuple: any

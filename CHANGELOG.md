@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.1.0-dev.8
+
+* Adapt `agent_dart: ^1.0.0-dev.25`.
+
 ## 0.1.0-dev.7
 
 * Add `@Synchronized` and retries to Android methods.
